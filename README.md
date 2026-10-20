@@ -13,4 +13,3 @@ pinned: false
 CES117V Capstone Project. Detects fruit in video/photos and classifies its ripeness
 using a fine-tuned YOLOv8n model, served with Flask in a Docker Space.
 
-**Group members and tasks:** _(fill in names and who did what)_
