@@ -1,1 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Fruit Ripeness Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  /* ---- design tokens: the four ripeness colours carry the whole page ---- */
+  :root {
+    --bg: #f2f5ef;  --surface: #ffffff;  --ink: #15261b;  --muted: #556558;  --line: #d8e0d4;
+    --btn-bg: #15261b;  --btn-ink: #ffffff;  --focus: #1f6feb;  --err: #b3261e;
+    --unripe: #5aa02c;  --ripe: #e0a400;  --overripe: #d9731a;  --rotten: #7a3b2e;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1a13; --surface: #17231b; --ink: #e9f0e9; --muted: #9bb09f; --line: #27382c;
+            --btn-bg: #e9f0e9; --btn-ink: #0f1a13; --focus: #79a8ff; --err: #f2b8b5; --rotten: #b26a58; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); line-height: 1.55; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 56px; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
+  /* ---- header and the ripeness scale ---- */
+  .brand { font-family: var(--display); font-weight: 700; font-size: 1rem; margin: 0 0 28px; color: var(--muted); }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.8rem); line-height: 1.04; letter-spacing: -0.02em; margin: 0 0 14px; max-width: 14ch; }
+  .lede { max-width: 56ch; margin: 0 0 28px; color: var(--muted); font-size: 1.05rem; }
+
+  .scale { position: relative; height: 18px; border-radius: 999px; overflow: hidden;
+           background: linear-gradient(90deg, var(--unripe) 0%, #b4c232 28%, var(--ripe) 52%, var(--overripe) 76%, var(--rotten) 100%); }
+  .scale.busy::after { content: ""; position: absolute; inset: 0; width: 35%;
+           background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+           animation: sweep 1.3s ease-in-out infinite; }
+  @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+  .stages { display: flex; justify-content: space-between; margin: 8px 2px 36px; font-size: .92rem; font-weight: 600; }
+  .stages span { display: inline-flex; align-items: center; gap: 7px; }
+  .stages i, .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--dot, var(--muted)); }
+  [data-class="unripe"] { --dot: var(--unripe); }  [data-class="ripe"] { --dot: var(--ripe); }
+  [data-class="overripe"] { --dot: var(--overripe); }  [data-class="rotten"] { --dot: var(--rotten); }
+
+  /* ---- two panels ---- */
+  .grid { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 880px) { .grid { grid-template-columns: 5fr 6fr; align-items: start; } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 1.25rem; margin: 0 0 14px; }
+
+  .tabs { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-bottom: 16px; }
+  .tab { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 7px 20px; border-radius: 999px; cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--btn-bg); color: var(--btn-ink); }
+
+  .drop { display: block; position: relative; border: 2px dashed var(--line); border-radius: 12px; padding: 30px 18px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--ink); background: var(--bg); }
+  .drop:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .drop strong { display: block; font-family: var(--display); font-size: 1.1rem; }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  .picked { margin-top: 12px; font-size: .95rem; word-break: break-all; }
+
+  button.go { margin-top: 16px; width: 100%; padding: 14px; border: 0; border-radius: 12px; background: var(--btn-bg); color: var(--btn-ink);
+              font: inherit; font-weight: 700; font-size: 1.02rem; cursor: pointer; }
+  button.go:disabled { opacity: .55; cursor: progress; }
+  #status { margin: 14px 0 0; min-height: 1.5em; color: var(--muted); }
+  #status.error { color: var(--err); font-weight: 600; }
+
+  /* ---- results ---- */
+  .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 40px 20px; text-align: center; margin: 0; }
+  video, img.result { display: block; width: 100%; border-radius: 12px; background: #000; }
+  .dl { display: inline-block; margin-top: 10px; color: var(--ink); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .9rem; }
+  td.num { text-align: right; font-family: var(--display); font-weight: 700; font-size: 1.15rem; }
+  th.num { text-align: right; }
+  td .dot { margin-right: 10px; vertical-align: 0; }
+  .meta { color: var(--muted); font-size: .92rem; margin: 12px 0 0; }
+  .hidden { display: none !important; }
+
+  .tips { margin-top: 28px; color: var(--muted); font-size: .95rem; max-width: 70ch; }
+  .chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; color: var(--ink); font-size: .9rem; }
+  .chip .dot { width: 9px; height: 9px; }
+
+  @media (prefers-reduced-motion: reduce) { .scale.busy::after { animation: none; width: 100%; opacity: .35; } .drop { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="brand">Fruit Ripeness Detector</p>
+  <h1>How ripe is your fruit?</h1>
+  <p class="lede">Upload a short video or a photo. The model draws a box around each fruit and tells you whether it is unripe, ripe, overripe or rotten.</p>
+
+  <div class="scale" id="scale" role="img" aria-label="Ripeness scale from unripe to rotten"></div>
+  <div class="stages" aria-hidden="true">
+    <span data-class="unripe"><i></i>Unripe</span>
+    <span data-class="ripe"><i></i>Ripe</span>
+    <span data-class="overripe"><i></i>overripe</span>
+    <span data-class="rotten"><i></i>Rotten</span>
+  </div>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="up-h">
+      <h2 id="up-h">Your clip</h2>
+      <div class="tabs" role="tablist" aria-label="Type of file">
+        <button class="tab" role="tab" id="tab-video" aria-selected="true" type="button">Video</button>
+        <button class="tab" role="tab" id="tab-image" aria-selected="false" type="button">Photo</button>
+      </div>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="video/*">
+        <strong id="drop-title">Drop a video here or choose a file</strong>
+        <small id="drop-hint">MP4, MOV or WebM, up to 30 MB. The first 20 seconds are analysed.</small>
+      </label>
+      <p class="picked hidden" id="picked"></p>
+      <button class="go" id="run" type="button">Detect ripeness</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="res-h">
+      <h2 id="res-h">Result</h2>
+      <p class="empty" id="empty">Nothing to show yet. Choose a video or photo and press Detect ripeness.</p>
+      <div class="hidden" id="output">
+        <div id="media"></div>
+        <a class="dl hidden" id="dl" download>Download the result</a>
+        <table>
+          <thead><tr><th>Ripeness found</th><th class="num">Most in one frame</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p class="meta" id="meta"></p>
+      </div>
+    </section>
+  </div>
+
+  <div class="tips">
+    Best results come from bright, even light with the fruit clearly in view. Fruit that is hidden behind other fruit or leaves is often missed.
+    <div class="chips">{% for c in class_names %}<span class="chip" data-class="{{ c|lower }}"><span class="dot"></span>{{ c }}</span>{% endfor %}</div>
+  </div>
+</div>
+
+<script>
+  var MAX_MB = 30;                                   /* same limit as the server */
+  var COLORS = { unripe: "#5aa02c", ripe: "#e0a400", overripe: "#d9731a", rotten: "#7a3b2e" };
+  var mode = "video";                                /* "video" or "image" */
+  var fileInput = document.getElementById("file");
+  var statusEl = document.getElementById("status");
+  var runBtn = document.getElementById("run");
+  var scaleEl = document.getElementById("scale");
+  var drop = document.getElementById("drop");
+  var picked = document.getElementById("picked");
+
+  function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? "error" : ""; }
+
+  /* switch between the Video and Photo tabs */
+  function setMode(m) {
+    mode = m;
+    document.getElementById("tab-video").setAttribute("aria-selected", m === "video");
+    document.getElementById("tab-image").setAttribute("aria-selected", m === "image");
+    fileInput.accept = m === "video" ? "video/*" : "image/*";
+    fileInput.value = "";
+    picked.classList.add("hidden");
+    document.getElementById("drop-title").textContent = m === "video" ? "Drop a video here or choose a file" : "Drop a photo here or choose a file";
+    document.getElementById("drop-hint").textContent = m === "video"
+      ? "MP4, MOV or WebM, up to 30 MB. The first 20 seconds are analysed."
+      : "JPG or PNG, up to 30 MB.";
+    say("", false);
+  }
+  document.getElementById("tab-video").onclick = function () { setMode("video"); };
+  document.getElementById("tab-image").onclick = function () { setMode("image"); };
+
+  /* show the chosen file name and size */
+  function showPicked() {
+    if (!fileInput.files.length) { picked.classList.add("hidden"); return; }
+    var f = fileInput.files[0];
+    picked.textContent = f.name + " (" + (f.size / 1048576).toFixed(1) + " MB)";
+    picked.classList.remove("hidden");
+    say("", false);
+  }
+  fileInput.addEventListener("change", showPicked);
+
+  /* drag and drop */
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; showPicked(); }
+  });
+
+  /* send the file to the Flask backend and wait for the answer */
+  runBtn.onclick = async function () {
+    if (!fileInput.files.length) { say("Choose a video or photo first.", true); return; }
+    var file = fileInput.files[0];
+    if (file.size > MAX_MB * 1048576) {
+      say("This file is " + (file.size / 1048576).toFixed(0) + " MB and the limit is " + MAX_MB + " MB. Trim the clip or record at 720p, then try again.", true);
+      return;
+    }
+    var fd = new FormData();
+    fd.append(mode, file);                           /* field name must match the backend: "video" or "image" */
+    runBtn.disabled = true; runBtn.textContent = "Analysing\u2026";
+    scaleEl.classList.add("busy");
+    say(mode === "video" ? "Analysing your video. This can take a minute or two." : "Analysing your photo.", false);
+    try {
+      var res = await fetch(mode === "video" ? "/predict_video" : "/predict_image", { method: "POST", body: fd });
+      var data;
+      try { data = await res.json(); }
+      catch (e) { throw new Error("The upload failed. The file may be too large or the server took too long. Try a shorter clip."); }
+      if (!res.ok) throw new Error(data.error || "Something went wrong. Try again.");
+      show(data);
+      say("Done.", false);
+    } catch (e) {
+      say(e.message, true);
+    } finally {
+      runBtn.disabled = false; runBtn.textContent = "Detect ripeness";
+      scaleEl.classList.remove("busy");
+    }
+  };
+
+  /* display the annotated video or photo and the counts */
+  function show(d) {
+    document.getElementById("empty").classList.add("hidden");
+    document.getElementById("output").classList.remove("hidden");
+    var media = document.getElementById("media");
+    media.innerHTML = "";
+    var url = d.video_url || d.image_url;
+    if (d.video_url) {
+      var v = document.createElement("video");
+      v.src = url + "?t=" + Date.now(); v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true;
+      media.appendChild(v);
+    } else {
+      var i = document.createElement("img");
+      i.className = "result"; i.alt = "Photo with detected fruit boxed and labelled"; i.src = url + "?t=" + Date.now();
+      media.appendChild(i);
+    }
+    var dl = document.getElementById("dl");
+    dl.href = url; dl.classList.remove("hidden");
+
+    var rows = document.getElementById("rows");
+    rows.innerHTML = "";
+    if (!d.classes.length) {
+      var tr0 = document.createElement("tr");
+      tr0.innerHTML = "<td colspan='2'></td>";
+      tr0.firstChild.textContent = "No fruit found. Try brighter light or move the camera closer.";
+      rows.appendChild(tr0);
+    }
+    d.classes.forEach(function (c) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td><span class='dot'></span><span class='nm'></span></td><td class='num'></td>";
+      tr.querySelector(".nm").textContent = c.name;
+      tr.querySelector(".dot").style.background = COLORS[c.name.toLowerCase()] || "#888";
+      tr.querySelector(".num").textContent = c.max_in_frame;
+      rows.appendChild(tr);
+    });
+    var meta = "Analysed " + d.frames_processed + (d.frames_processed === 1 ? " image" : " frames") +
+               ", fruit found in " + d.frames_with_detections + ".";
+    if (d.truncated) meta += " Only the first 20 seconds were analysed.";
+    document.getElementById("meta").textContent = meta;
+  }
+</script>
+</body>
+</html>
