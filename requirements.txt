@@ -1,0 +1,12 @@
+# Web server
+flask>=3.0,<4
+gunicorn>=22
+
+# Model and video handling
+ultralytics==8.4.182
+opencv-python-headless
+
+# PyTorch CPU build (much smaller than the default GPU build)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
